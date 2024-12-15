@@ -1,0 +1,20 @@
+{
+  "name": "corridoro",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.3"
+  },
+  "dependencies": {
+    "@turf/bezier-spline": "^7.1.0",
+    "@turf/buffer": "^7.1.0",
+    "@turf/dissolve": "^7.1.0",
+    "jspdf": "^2.5.2",
+    "ol": "latest",
+    "proj4": "^2.15.0"
+  }
+}
