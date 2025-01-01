@@ -7,7 +7,7 @@
     "serve": "vite preview"
   },
   "devDependencies": {
-    "vite": "^6.0.3"
+    "vite": "^6.0.6"
   },
   "dependencies": {
     "@turf/bezier-spline": "^7.1.0",
