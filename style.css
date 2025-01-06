@@ -12,6 +12,15 @@ html, body {
 }
 
 .print {
+  top: 2.5em;
+  right: .5em;
+}
+
+.ol-attribution {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.open-pdf {
   top: .5em;
   right: .5em;
 }

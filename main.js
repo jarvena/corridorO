@@ -25,7 +25,28 @@ import { getPointResolution } from 'ol/proj';
 import jsPDF from 'jspdf';
 import { Circle, Point, MultiPoint} from 'ol/geom';
 
+//import * as pdfjsLib from 'pdfjs-dist/webpack';
+//pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.js';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?worker';
+
+const init = () => {
+  try {
+    if (typeof window === 'undefined' || !('Worker' in window)) {
+      throw new Error('Web Workers not supported in this environment.');
+    }
+
+    window.pdfjsWorker = pdfjsWorker;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  } catch (error) {
+    console.log('Error', error);
+  }
+};
+init();
+
 import sampleFeatures from './sampleFeatures';
+import ImageLayer from 'ol/layer/Image';
+import Static from 'ol/source/ImageStatic';
 
 proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs");
 register(proj4);
@@ -50,6 +71,18 @@ const corridorize = (data) => ({
 
 const vectorSource = new VectorSource({
   features: geojsonFormat.readFeatures(dissolve(corridorize(sampleFeatures)))
+})
+
+const style = new Style({
+  fill: new Fill({
+    color: 'white',
+    opacity: .1
+  }),
+});
+
+const defaultVectorLayer = new VectorLayer({
+  source: vectorSource,
+  style: style
 })
   // await fetch('sample.geojson')
   // .then(response => response.json())
@@ -76,7 +109,7 @@ const mapantSource = new XYZ({
     matrixIds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   }),
   crossOrigin: 'anonymous',
-  attributions: 'Aineistot &copy; <a href="https://mapant.fi">MapAnt</a> ja <a href="https://www.maanmittauslaitos.fi/">MML</a>'
+  attributions: 'Aineistot &copy; <a href="https://mapant.fi">MapAnt</a> ja <a href="https://www.maanmittauslaitos.fi/">MML</a>; Kehitysehdotukset <a href="https://github.com/jarvena/corridorO/issues">Github</a>'
 });
 
 const mapant = new TileLayer({
@@ -87,13 +120,6 @@ const base = new TileLayer({
   className: 'base',
   source: mapantSource,
   opacity: 0.1
-});
-
-const style = new Style({
-  fill: new Fill({
-    color: 'white',
-    opacity: .1
-  }),
 });
 
 mapant.on('prerender', function (e) {
@@ -116,8 +142,8 @@ const corridorDrawingLayer = new VectorLayer({
   source: corridorDrawingSource,
   style: {
     "fill-color": 'white',
-    "stroke-color": 'magenta',
-    "stroke-width": 2,
+    //"stroke-color": 'magenta',
+    //"stroke-width": 2,
   }
 })
 
@@ -230,10 +256,7 @@ const map = new Map({
     //vectorDrawingLayer,
     vectorDrawingLayer,
     corridorDrawingLayer,
-    new VectorLayer({
-      source: vectorSource,
-      style: style
-    }),
+    defaultVectorLayer,
     mapant,
     // new VectorLayer({ // Can be used to help the drawing process
     //   source: corridorDrawingSource,
@@ -247,6 +270,7 @@ const map = new Map({
     new VectorLayer({
       className: 'drawings',
       source: vectorDrawingSource,
+      zIndex: 10,
       style: [
         new Style({
           geometry: (feature) => {
@@ -321,3 +345,142 @@ vectorDrawingSource.on('change', (e) => {
   corridorDrawingSource.addFeatures(geojsonFormat.readFeatures(corridorDrawing))
 })
 
+const pixelsToMeters = (pixels) => {
+  const dpi = 300
+  const mapScale = 10000
+  return pixels * 0.0254 / dpi * mapScale
+}
+
+const computeExtent = ({height, width}) => {
+  //const extent = map.getView().calculateExtent()
+  console.log('height', height, width)
+  const center = map.getView().getCenter()
+  const extent = [
+    center[0] - pixelsToMeters(width)/2,
+    center[1] - pixelsToMeters(height)/2,
+    center[0] + pixelsToMeters(width)/2,
+    center[1] + pixelsToMeters(height)/2
+  ]
+
+  console.log('extentcomputed', extent)
+  return extent
+}
+
+const readPdfMap = (pdfData) => {
+  const pdfMap = pdfjsLib.getDocument({data: pdfData}) //'samplemap.pdf')
+  console.log('pdfMap', pdfMap)
+  console.log('pdfMap.promise', pdfMap.promise)
+  pdfMap.promise.then(pdf => {
+    console.log('pdf', pdf)
+    pdf.getPage(1).then(page => {
+      console.log('page', page)
+      const viewport = page.getViewport({scale: 300/72});
+      const mapCanvas = new OffscreenCanvas(Math.floor(viewport.width), Math.floor(viewport.height)); //document.createElement('canvas');
+      const mapContext = mapCanvas.getContext('2d');
+      // mapCanvas.width = Math.floor(viewport.width);
+      // mapCanvas.height = Math.floor(viewport.height);
+      console.log('viewport', viewport)
+      console.log('mapCanvasheight', mapCanvas.height)
+      page.render({
+        canvasContext: mapContext,
+        viewport: viewport,
+      }).promise.then(() => {
+        //const mapImage = mapCanvas.toDataURL('image/png');
+        // const mapImage = createImageBitmap(mapCanvas).then(imageBitmap => {
+        //   console.log('imageBitmap', imageBitmap)
+        //   const a = document.createElement('a');
+        //   a.href = URL.createObjectURL(new Blob([imageBitmap], { type: 'image/png' })); // or imageBitmap);
+        //   a.download = 'mapImage.png';
+        //   a.click();
+        // })
+        const mapImage = mapCanvas.convertToBlob();
+        mapImage.then(imageBlob => {
+          const a = document.createElement('a'); // For debugging to validate image creation
+          a.href = URL.createObjectURL(new Blob([imageBlob], { type: 'image/png' })); // or imageBitmap);
+          //a.download = 'mapImage.png';
+          //a.click();
+          const mapImageSource = new Static({
+            url: a.href,
+            crossOrigin: 'anonymous',
+            imageExtent: computeExtent({width: mapCanvas.width, height: mapCanvas.height}) //map.getView().calculateExtent()
+          })
+
+          const staticImageLayer = new ImageLayer({
+            source: mapImageSource,
+          })
+
+          const staticImageBase = new ImageLayer({
+            source: mapImageSource,
+            opacity: 0.1
+          })
+
+          map.addLayer(staticImageLayer)
+          map.addLayer(staticImageBase)
+
+          staticImageLayer.on('prerender', function (e) {
+            e.context.globalCompositeOperation = 'source-atop';
+          });
+          staticImageLayer.on('postrender', function (e) {
+            e.context.globalCompositeOperation = 'source-over'; // back to default
+          });
+
+          console.log('layers', map.getLayers())
+          base.setZIndex(0)
+          base.setVisible(false)
+          staticImageBase.setZIndex(0)
+          defaultVectorLayer.setZIndex(1)
+          vectorDrawingLayer.setZIndex(1)
+          corridorDrawingLayer.setZIndex(1)
+          mapant.setZIndex(2)
+          mapant.setVisible(false)
+          staticImageLayer.setZIndex(3)
+        })
+        
+      })
+    })
+  })
+}
+
+class PdfMapControl extends Control {
+  /**
+   * @param {Object} [opt_options] Control options.
+   */
+  constructor(opt_options) {
+    const options = opt_options || {};
+
+    const button = document.createElement('button');
+    button.innerHTML = '📂';
+
+    const element = document.createElement('div');
+    element.className = 'open-pdf ol-unselectable ol-control';
+    element.appendChild(button);
+
+    const inputElement = document.createElement('input');
+    inputElement.style.display = 'none';
+    inputElement.type = 'file';
+    inputElement.accept = 'application/pdf';
+    inputElement.addEventListener('change', (e) => {
+      console.log('inputEvent', e)
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        readPdfMap(e.target.result)
+      }
+      reader.readAsArrayBuffer(file);
+    });
+    element.appendChild(inputElement);
+
+    button.addEventListener('click', () => {
+      inputElement.click();
+    }, false);
+
+    super({
+      element: element,
+      target: options.target,
+    });
+  }
+}
+
+map.addControl(new PdfMapControl)
+
+//readPdfMap()

@@ -15,6 +15,7 @@
     "@turf/dissolve": "^7.1.0",
     "jspdf": "^2.5.2",
     "ol": "latest",
+    "pdfjs-dist": "^4.9.155",
     "proj4": "^2.15.0"
   }
 }
