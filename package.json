@@ -12,7 +12,7 @@
   "dependencies": {
     "@turf/bezier-spline": "^7.1.0",
     "@turf/buffer": "^7.1.0",
-    "@turf/dissolve": "^7.1.0",
+    "@turf/dissolve": "^7.2.0",
     "jspdf": "^2.5.2",
     "ol": "latest",
     "pdfjs-dist": "^4.9.155",
